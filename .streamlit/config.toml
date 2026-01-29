@@ -1,0 +1,9 @@
+# Streamlit theme configuration for LLM Fiction
+# Per UI-02: Minimal gray-white style, no colorful decorations
+
+[theme]
+primaryColor = "#808080"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f5f5f5"
+textColor = "#333333"
+font = "sans serif"
