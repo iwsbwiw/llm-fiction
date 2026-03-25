@@ -9,13 +9,54 @@ Per D-13, D-14:
 - initialize_story_node: transforms one-liner into StoryBible (temp 0.3)
 """
 
+import json
+import re
+
 from langchain_core.messages import HumanMessage, SystemMessage
+from pydantic import BaseModel
 
 from src.agents.schemas import ChapterOutline, ReviewResult, StoryInitialization
 from src.llm_client import create_llm_with_temp
 from src.memory.context_injector import format_context
 from src.memory.models import StoryBible
 from src.models import Character, CharacterType
+
+
+def _extract_json_object(text: str) -> str:
+    """Extract the first JSON object from model output."""
+    stripped = text.strip()
+    if stripped.startswith("{") and stripped.endswith("}"):
+        return stripped
+
+    code_block_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if code_block_match:
+        return code_block_match.group(1).strip()
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        return text[start:end + 1].strip()
+
+    raise ValueError(f"Model did not return JSON. Raw output: {text[:300]}")
+
+
+def _invoke_json_schema(llm, schema: type[BaseModel], messages: list) -> BaseModel:
+    """Invoke model and parse a JSON response into the target schema."""
+    schema_json = json.dumps(schema.model_json_schema(), ensure_ascii=False, indent=2)
+    enforced_messages = [
+        *messages,
+        HumanMessage(
+            content=(
+                "Return only valid JSON that matches this schema exactly. "
+                "Do not use markdown, headings, or explanation.\n\n"
+                f"{schema_json}"
+            )
+        ),
+    ]
+    response = llm.invoke(enforced_messages)
+    raw_content = response.content if hasattr(response, "content") else str(response)
+    json_text = _extract_json_object(raw_content)
+    return schema.model_validate_json(json_text)
 
 
 def screenwriter_node(state: dict) -> dict:
@@ -32,8 +73,6 @@ def screenwriter_node(state: dict) -> dict:
         Dict with chapter_outline key containing JSON string of ChapterOutline.
     """
     llm = create_llm_with_temp(temperature=0.1)
-    structured_llm = llm.with_structured_output(ChapterOutline)
-
     story_bible: StoryBible = state["story_bible"]
     current_chapter = state["current_chapter"]
     user_prompt = state.get("user_prompt", "")
@@ -64,7 +103,7 @@ Follow the established story direction and character arcs."""),
         HumanMessage(content=user_prompt if user_prompt else f"Create the outline for Chapter {current_chapter}.")
     ]
 
-    outline: ChapterOutline = structured_llm.invoke(messages)
+    outline: ChapterOutline = _invoke_json_schema(llm, ChapterOutline, messages)
 
     return {
         "chapter_outline": outline.model_dump_json()
@@ -120,8 +159,8 @@ Chapter Outline:
 
 {revision_feedback}
 
-Write the chapter content. Be creative but stay true to the outline and character personalities.
-Write approximately 2000 words of engaging prose."""),
+Write the chapter content. Be creative but stay true to the outline and character personalities."""),
+        HumanMessage(content="Write approximately 2000 words of engaging prose for this chapter."),
     ]
 
     content = llm.invoke(messages).content
@@ -150,8 +189,6 @@ def reviewer_node(state: dict) -> dict:
         Dict with review_passed (bool) and review_issues (list[str]).
     """
     llm = create_llm_with_temp(temperature=0.2)
-    structured_llm = llm.with_structured_output(ReviewResult)
-
     story_bible: StoryBible = state["story_bible"]
     chapter_content = state.get("chapter_content", "")
 
@@ -178,7 +215,7 @@ Return pass if the chapter is acceptable, or fail with specific issues that need
 {chapter_content}""")
     ]
 
-    result: ReviewResult = structured_llm.invoke(messages)
+    result: ReviewResult = _invoke_json_schema(llm, ReviewResult, messages)
 
     return {
         "review_passed": result.verdict == "pass",
@@ -199,8 +236,6 @@ def initialize_story_node(state: dict) -> dict:
         Dict with story_bible key containing initialized StoryBible.
     """
     llm = create_llm_with_temp(temperature=0.3)
-    structured_llm = llm.with_structured_output(StoryInitialization)
-
     user_prompt = state.get("user_prompt", "")
 
     messages = [
@@ -223,7 +258,7 @@ Be creative but coherent. The story should have a clear beginning, middle, and p
         HumanMessage(content=f"Create a story from this idea: {user_prompt}")
     ]
 
-    result: StoryInitialization = structured_llm.invoke(messages)
+    result: StoryInitialization = _invoke_json_schema(llm, StoryInitialization, messages)
 
     # Create StoryBible from the initialization result
     characters = []

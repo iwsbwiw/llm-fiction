@@ -106,7 +106,7 @@ def render_input_page():
 
                 # Create initial story bible
                 story_bible = StoryBible()
-                story_bible.premise = user_input
+                story_bible.long_term_macro = user_input
 
                 # Show generation status (text-only per D-05)
                 status_placeholder = st.empty()
@@ -132,7 +132,7 @@ def render_input_page():
 
                     # Save to store
                     store = StoryStore()
-                    story_id = store.save(novel, [chapter], [])
+                    story_id = store.save(novel, [chapter], [], story_bible=story_bible)
 
                     # Update session state
                     st.session_state.current_story_id = story_id

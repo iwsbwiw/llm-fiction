@@ -3,6 +3,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from src.config import settings
+from src.memory.models import StoryBible
 from src.models import Character, Chapter, Novel
 
 
@@ -14,13 +16,13 @@ class StoryStore:
     D-10: Story ID format: timestamp {YYYYMMDD-HHMMSS}
     """
 
-    def __init__(self, base_dir: Path | str = Path("data/stories")):
+    def __init__(self, base_dir: Path | str | None = None):
         """Initialize storage with base directory.
 
         Args:
             base_dir: Directory to store story JSON files.
         """
-        self.base_dir = Path(base_dir)
+        self.base_dir = Path(base_dir or settings.data_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
     def _generate_id(self) -> str:
@@ -32,7 +34,11 @@ class StoryStore:
         return datetime.now().strftime("%Y%m%d-%H%M%S")
 
     def save(
-        self, novel: Novel, chapters: list[Chapter], characters: list[Character]
+        self,
+        novel: Novel,
+        chapters: list[Chapter],
+        characters: list[Character],
+        story_bible: StoryBible | None = None,
     ) -> str:
         """Save story to JSON file.
 
@@ -40,6 +46,7 @@ class StoryStore:
             novel: Novel metadata.
             chapters: List of chapters.
             characters: List of characters.
+            story_bible: Current story bible state for future chapter generation.
 
         Returns:
             Story ID (used as filename).
@@ -51,6 +58,7 @@ class StoryStore:
             "novel": novel.model_dump(),
             "chapters": [c.model_dump() for c in chapters],
             "characters": [c.model_dump() for c in characters],
+            "story_bible": story_bible.model_dump() if story_bible else None,
         }
 
         with open(filepath, "w", encoding="utf-8") as f:
@@ -77,6 +85,11 @@ class StoryStore:
             "novel": Novel.model_validate(data["novel"]),
             "chapters": [Chapter.model_validate(c) for c in data["chapters"]],
             "characters": [Character.model_validate(c) for c in data["characters"]],
+            "story_bible": (
+                StoryBible.model_validate(data["story_bible"])
+                if data.get("story_bible")
+                else StoryBible()
+            ),
         }
 
     def list_stories(self) -> list[dict]:

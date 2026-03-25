@@ -36,6 +36,9 @@ ENV/
 .env.local
 .env.*.local
 
+# Runtime data
+data/
+
 # Testing
 .pytest_cache/
 .coverage
@@ -47,3 +50,4 @@ Thumbs.db
 
 # Screenshots (temporary)
 *.png
+!docs/images/*.png

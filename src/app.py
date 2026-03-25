@@ -4,7 +4,15 @@ Per D-01: Single-page application with session state management.
 Two main states: 'input' (start page) and 'reading' (reading page).
 """
 
+import sys
+from pathlib import Path
+
 import streamlit as st
+
+# Ensure the project root is importable when launched via `streamlit run src/app.py`.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def main():
@@ -43,8 +51,9 @@ def main():
         from src.ui.sidebar import render_sidebar
 
         render_sidebar()
-    except ImportError:
-        pass  # sidebar.py not yet created
+    except Exception as e:
+        st.error(f"Sidebar failed to load: {e}")
+        st.exception(e)
 
     # Route to page based on state (D-01)
     if st.session_state.app_state == "input":
@@ -52,15 +61,17 @@ def main():
             from src.ui.pages import render_input_page
 
             render_input_page()
-        except ImportError:
-            st.error("UI module not found. Please check installation.")
+        except Exception as e:
+            st.error(f"Input page failed to load: {e}")
+            st.exception(e)
     elif st.session_state.app_state == "reading":
         try:
             from src.ui.pages import render_reading_page
 
             render_reading_page()
-        except ImportError:
-            st.error("Reading page not yet implemented.")
+        except Exception as e:
+            st.error(f"Reading page failed to load: {e}")
+            st.exception(e)
 
 
 if __name__ == "__main__":

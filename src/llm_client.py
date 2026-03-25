@@ -15,6 +15,17 @@ from langchain_openai import ChatOpenAI
 from src.config import settings
 
 
+def _openai_kwargs(temperature: float | None = None) -> dict:
+    """Build kwargs for OpenAI-compatible chat models."""
+    kwargs = {"model": settings.llm_model, "api_key": settings.openai_api_key}
+    base_url = getattr(settings, "openai_base_url", None)
+    if isinstance(base_url, str) and base_url.strip():
+        kwargs["base_url"] = base_url
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    return kwargs
+
+
 def create_llm() -> BaseChatModel:
     """Create LLM client based on current settings.
 
@@ -28,7 +39,7 @@ def create_llm() -> BaseChatModel:
     model = settings.llm_model
 
     if provider == "openai":
-        return ChatOpenAI(model=model, api_key=settings.openai_api_key)
+        return ChatOpenAI(**_openai_kwargs())
     elif provider == "claude":
         return ChatAnthropic(model_name=model, api_key=settings.anthropic_api_key)
     elif provider == "deepseek":
@@ -58,7 +69,7 @@ def create_llm_with_temp(temperature: float = 0.0) -> BaseChatModel:
     model = settings.llm_model
 
     if provider == "openai":
-        return ChatOpenAI(model=model, api_key=settings.openai_api_key, temperature=temperature)
+        return ChatOpenAI(**_openai_kwargs(temperature=temperature))
     elif provider == "claude":
         return ChatAnthropic(model_name=model, api_key=settings.anthropic_api_key, temperature=temperature)
     elif provider == "deepseek":
