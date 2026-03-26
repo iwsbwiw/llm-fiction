@@ -129,6 +129,14 @@ DATA_DIR=data/stories
 
 启动后访问 `http://localhost:8501`。
 
+## 许可证
+
+本项目采用 `GNU Affero General Public License v3.0` 许可，许可证全文见 [LICENSE](LICENSE)。
+
+- 允许使用、修改、分发和商业化使用。
+- 如果你分发修改版本，必须继续以 `AGPL-3.0` 方式开放相应源码。
+- 如果你将修改后的版本作为网络服务提供给用户，也需要向这些用户提供对应源代码。
+
 ## 存储设计
 
 - 每个故事存储为 `data/stories/{story-id}.json`
