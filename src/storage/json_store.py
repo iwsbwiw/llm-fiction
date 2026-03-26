@@ -52,6 +52,8 @@ class StoryStore:
             Story ID (used as filename).
         """
         story_id = novel.id or self._generate_id()
+        novel.id = story_id
+        novel.last_read_chapter = len(chapters)
         filepath = self.base_dir / f"{story_id}.json"
 
         data = {

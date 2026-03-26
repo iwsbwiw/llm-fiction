@@ -7,8 +7,27 @@ Implements D-01 single-page application with two main views:
 
 import streamlit as st
 
+from src.memory import StoryBible
 from src.storage.json_store import StoryStore
 from src.ui.styles import render_chapter_content
+
+
+def _prepare_story_bible(
+    story_bible: StoryBible | None,
+    user_prompt: str,
+    chapters: list["Chapter"],
+) -> StoryBible:
+    """Ensure story bible carries enough context for continuation."""
+    prepared = story_bible or StoryBible()
+
+    if not prepared.long_term_macro and user_prompt:
+        prepared.long_term_macro = user_prompt
+
+    # Seed recent context from persisted chapters so continuation does not restart.
+    if chapters:
+        prepared.recent_chapters = chapters[-2:]
+
+    return prepared
 
 
 def generate_next_chapter(story_id: str, story_bible, existing_chapters: list) -> "Chapter":
@@ -47,14 +66,22 @@ def generate_next_chapter(story_id: str, story_bible, existing_chapters: list) -
     # Load existing data and append
     store = StoryStore()
     data = store.load(story_id)
+    current_story_bible = _prepare_story_bible(
+        data.get("story_bible"),
+        data["novel"].one_sentence_prompt,
+        data["chapters"],
+    )
 
     data["chapters"].append(new_chapter)
+    current_story_bible.recent_chapters = data["chapters"][-2:]
+    data["novel"].id = story_id
 
     # Save updated story
     store.save(
         data["novel"],
         data["chapters"],
-        data["characters"]
+        data["characters"],
+        story_bible=current_story_bible,
     )
 
     return new_chapter
@@ -94,7 +121,6 @@ def render_input_page():
         if st.button("开始创作", use_container_width=True, key="start_story_btn"):
             if user_input and user_input.strip():
                 from src.models import Novel, NovelStatus
-                from src.memory import StoryBible
                 from src.agents.graph import run_generation
 
                 # Create novel
@@ -129,6 +155,7 @@ def render_input_page():
 
                     result = run_generation(initial_state)
                     chapter = result["completed_chapter"]
+                    story_bible = _prepare_story_bible(story_bible, user_input, [chapter])
 
                     # Save to store
                     store = StoryStore()
@@ -212,7 +239,7 @@ def render_reading_page():
             status_placeholder.info(f"正在生成第 {next_num} 章...")
 
             try:
-                new_chapter = generate_next_chapter(story_id, data.get("story_bible"), chapters)
+                generate_next_chapter(story_id, data.get("story_bible"), chapters)
 
                 # Navigate to new chapter
                 st.session_state.current_chapter = next_num
