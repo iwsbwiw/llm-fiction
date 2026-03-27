@@ -19,11 +19,15 @@ def render_chapter_navigation(store: StoryStore):
     try:
         data = store.load(current_story_id)
         chapters = data["chapters"]
+        seen_chapter_nums: set[int] = set()
 
         st.markdown("### 章节")
 
         for chapter in chapters:
             chapter_num = chapter.chapter_number
+            if chapter_num in seen_chapter_nums:
+                continue
+            seen_chapter_nums.add(chapter_num)
             is_current = chapter_num == current_chapter
 
             # Highlight current chapter with ▶ prefix (D-03)

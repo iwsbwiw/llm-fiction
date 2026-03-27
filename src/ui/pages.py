@@ -30,6 +30,18 @@ def _prepare_story_bible(
     return prepared
 
 
+def _dedupe_chapters(chapters: list["Chapter"]) -> list["Chapter"]:
+    """Keep only one chapter per chapter_number, preferring the latest version."""
+    deduped: dict[int, "Chapter"] = {}
+
+    for chapter in chapters:
+        current = deduped.get(chapter.chapter_number)
+        if current is None or chapter.generated_at >= current.generated_at:
+            deduped[chapter.chapter_number] = chapter
+
+    return [deduped[num] for num in sorted(deduped)]
+
+
 def generate_next_chapter(story_id: str, story_bible, existing_chapters: list) -> "Chapter":
     """Generate next chapter and append to story.
 
@@ -44,12 +56,20 @@ def generate_next_chapter(story_id: str, story_bible, existing_chapters: list) -
     from src.agents.graph import run_generation
     from src.models import Chapter
 
+    store = StoryStore()
+    data = store.load(story_id)
+    current_story_bible = _prepare_story_bible(
+        story_bible or data.get("story_bible"),
+        data["novel"].one_sentence_prompt,
+        data["chapters"],
+    )
+
     next_chapter_num = len(existing_chapters) + 1
 
-    # Generate next chapter
+    # Generate next chapter using the latest persisted context.
     initial_state = {
-        "user_prompt": "",  # Not needed for continuation
-        "story_bible": story_bible,
+        "user_prompt": data["novel"].one_sentence_prompt,
+        "story_bible": current_story_bible,
         "current_chapter": next_chapter_num,
         "revision_count": 0,
         "max_revisions": 3,
@@ -63,16 +83,8 @@ def generate_next_chapter(story_id: str, story_bible, existing_chapters: list) -
     result = run_generation(initial_state)
     new_chapter = result["completed_chapter"]
 
-    # Load existing data and append
-    store = StoryStore()
-    data = store.load(story_id)
-    current_story_bible = _prepare_story_bible(
-        data.get("story_bible"),
-        data["novel"].one_sentence_prompt,
-        data["chapters"],
-    )
-
     data["chapters"].append(new_chapter)
+    data["chapters"] = _dedupe_chapters(data["chapters"])
     current_story_bible.recent_chapters = data["chapters"][-2:]
     data["novel"].id = story_id
 

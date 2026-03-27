@@ -6,25 +6,49 @@ Per D-02, D-05, D-14:
 - StoryInitialization: Initial story setup from user prompt
 """
 
+from enum import Enum
+
 from pydantic import BaseModel, Field
-from typing import Literal
+from typing import Literal, Optional
+
+
+class PacingIntent(str, Enum):
+    """Pacing intent for a chapter outline.
+
+    - setup: Lay groundwork, foreshadow, build atmosphere
+    - escalation: Advance the plot, raise tension
+    - climax: Peak intensity, major revelation or confrontation
+    - reflection: Slow down, emotional processing, character bonding, daily life
+    """
+
+    setup = "setup"
+    escalation = "escalation"
+    climax = "climax"
+    reflection = "reflection"
 
 
 class ChapterOutline(BaseModel):
     """Structured output for Screenwriter per D-02.
 
     Per D-02, outline includes: chapter title, main plot, character appearances,
-    key turning point.
+    optional key development, transition note, and pacing intent.
     """
 
     title: str = Field(description="Chapter title")
     main_plot: str = Field(description="Main plot points for this chapter")
     character_appearances: list[str] = Field(
         default_factory=list,
-        description="Characters appearing in this chapter"
+        description="Characters appearing in this chapter. Prefer existing characters; only add new ones with strong justification."
     )
-    key_turning_point: str = Field(
-        description="Key plot twist or development in this chapter"
+    key_development: Optional[str] = Field(
+        default=None,
+        description="Optional key plot development for this chapter. Omit for slow-paced chapters focused on character interaction or atmosphere."
+    )
+    transition_note: str = Field(
+        description="How this chapter connects to the previous chapter's ending (scene, emotion, or narrative thread to carry forward). For chapter 1, describe the opening atmosphere."
+    )
+    pacing_intent: PacingIntent = Field(
+        description="Pacing intent for this chapter: setup (lay groundwork), escalation (advance plot), climax (peak intensity), or reflection (slow down, emotional depth)."
     )
 
 

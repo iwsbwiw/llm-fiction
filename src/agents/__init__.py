@@ -1,10 +1,11 @@
 """Agent schemas and nodes for multi-agent story generation."""
 
-from src.agents.schemas import ChapterOutline, ReviewResult, StoryInitialization
+from src.agents.schemas import ChapterOutline, PacingIntent, ReviewResult, StoryInitialization
 from src.agents.state import GenerationState
 
 __all__ = [
     "ChapterOutline",
+    "PacingIntent",
     "ReviewResult",
     "StoryInitialization",
     "GenerationState",

@@ -89,7 +89,7 @@ class TestCompleteNode:
     """Tests for complete_node function."""
 
     def test_complete_node_creates_chapter(self):
-        """Test that complete_node creates a Chapter object."""
+        """Test that complete_node creates a Chapter object with title from outline."""
         state: GenerationState = {
             "user_prompt": "test",
             "story_bible": StoryBible(),
@@ -108,7 +108,7 @@ class TestCompleteNode:
         assert "completed_chapter" in result
         chapter = result["completed_chapter"]
         assert isinstance(chapter, Chapter)
-        assert chapter.title == "Chapter 5"
+        assert chapter.title == "The Discovery"
         assert chapter.content == "Once upon a time in a land far away..."
         assert chapter.chapter_number == 5
         assert chapter.chapter_outline == '{"title": "The Discovery", "main_plot": "A hero finds a map"}'
@@ -297,7 +297,9 @@ class TestFullGenerationFlow:
                 title="The Beginning",
                 main_plot="A hero starts their journey",
                 character_appearances=["Alice"],
-                key_turning_point="Alice discovers her power",
+                key_development="Alice discovers her power",
+                transition_note="Open with Alice in her village",
+                pacing_intent="setup",
             )
 
             # Mock screenwriter to return outline

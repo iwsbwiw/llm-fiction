@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.agents.schemas import ChapterOutline, ReviewResult, StoryInitialization
+from src.agents.schemas import ChapterOutline, PacingIntent, ReviewResult, StoryInitialization
 
 
 class TestChapterOutline:
@@ -14,20 +14,35 @@ class TestChapterOutline:
             title="The Beginning",
             main_plot="Hero discovers a mysterious artifact",
             character_appearances=["Alice", "Bob"],
-            key_turning_point="Alice finds the ancient map"
+            key_development="Alice finds the ancient map",
+            transition_note="Opens with Alice staring at the sunset from the hilltop",
+            pacing_intent=PacingIntent.setup,
         )
 
         assert outline.title == "The Beginning"
         assert outline.main_plot == "Hero discovers a mysterious artifact"
         assert outline.character_appearances == ["Alice", "Bob"]
-        assert outline.key_turning_point == "Alice finds the ancient map"
+        assert outline.key_development == "Alice finds the ancient map"
+        assert outline.pacing_intent == PacingIntent.setup
+
+    def test_key_development_is_optional(self):
+        """Test that key_development can be None for slow-paced chapters."""
+        outline = ChapterOutline(
+            title="A Quiet Day",
+            main_plot="Characters rest and talk",
+            transition_note="Continues from the calm after the storm",
+            pacing_intent=PacingIntent.reflection,
+        )
+
+        assert outline.key_development is None
 
     def test_character_appearances_defaults_to_empty_list(self):
         """Test that character_appearances defaults to empty list."""
         outline = ChapterOutline(
             title="Empty Chapter",
             main_plot="Nothing happens",
-            key_turning_point="Still nothing"
+            transition_note="Same scene continues",
+            pacing_intent=PacingIntent.setup,
         )
 
         assert outline.character_appearances == []
@@ -69,7 +84,9 @@ class TestStoryInitialization:
         outline1 = ChapterOutline(
             title="Chapter 1",
             main_plot="Introduction",
-            key_turning_point="Hero appears"
+            key_development="Hero appears",
+            transition_note="Establish the world and tone",
+            pacing_intent=PacingIntent.setup,
         )
 
         init = StoryInitialization(

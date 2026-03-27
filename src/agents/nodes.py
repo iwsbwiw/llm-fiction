@@ -64,7 +64,7 @@ def screenwriter_node(state: dict) -> dict:
 
     Per AGT-01: Temperature 0.1 (range 0.0-0.2)
     Per D-11: Receives L3 (macro) + L2 (arc summaries) + L4 (characters)
-    Per D-02: Outline includes title, main_plot, character_appearances, key_turning_point
+    Per D-02: Outline includes title, main_plot, character_appearances, pacing_intent, transition_note
 
     Args:
         state: LangGraph state containing story_bible, current_chapter, user_prompt.
@@ -80,6 +80,16 @@ def screenwriter_node(state: dict) -> dict:
     # Build context (L3 + L2 + L4 for outline planning per D-11)
     context = format_context(story_bible)
 
+    is_first_chapter = current_chapter == 1 or not story_bible.recent_chapters
+
+    transition_guidance = (
+        "This is the first chapter — describe the opening atmosphere in transition_note."
+        if is_first_chapter
+        else f"""The previous chapter ended as follows. The new chapter MUST carry forward this scene, mood, or emotion naturally:
+
+{context['transition_anchor']}"""
+    )
+
     messages = [
         SystemMessage(content=f"""You are a screenwriter creating chapter outlines for a story.
 
@@ -92,12 +102,26 @@ Recent Developments:
 Active Characters:
 {context['active_characters']}
 
+{transition_guidance}
+
 Your task is to create an outline for Chapter {current_chapter}.
 The outline should:
 1. Have a compelling chapter title
 2. Describe the main plot points for this chapter
-3. List which characters will appear
-4. Identify the key turning point or development
+3. List which characters will appear — PRIORITIZE existing characters from the Active Characters list above. Only introduce a new character if there is a strong narrative reason (e.g., a villain's debut, a key ally). Do NOT add new characters just for variety.
+4. Set a pacing_intent that fits the story rhythm:
+   - "setup": Lay groundwork, foreshadow, build atmosphere. Not every chapter needs to advance the main plot.
+   - "escalation": Advance the plot, raise tension.
+   - "climax": Peak intensity — major revelation or confrontation.
+   - "reflection": Slow down — emotional processing, character bonding, daily life, aftermath of events.
+5. Fill transition_note explaining how this chapter connects to the previous chapter's ending.
+6. Only fill key_development when this chapter has a meaningful plot event. For "setup" and "reflection" chapters, leave key_development as null.
+
+IMPORTANT pacing guidance:
+- Do NOT make every chapter an escalation or climax. A healthy story alternates between fast and slow chapters.
+- After a tense chapter, prefer "reflection" or "setup" to let readers breathe.
+- Every 3-4 chapters, include at least one "reflection" chapter focused on character relationships and emotional depth.
+- "climax" chapters should be rare (roughly every 5-8 chapters).
 
 Follow the established story direction and character arcs."""),
         HumanMessage(content=user_prompt if user_prompt else f"Create the outline for Chapter {current_chapter}.")
@@ -132,6 +156,16 @@ def writer_node(state: dict) -> dict:
     # Build full context (all 4 tiers per D-11)
     context = format_context(story_bible)
 
+    # Parse pacing_intent from outline for style guidance
+    pacing_guidance = ""
+    try:
+        import json as _json
+        outline_dict = _json.loads(chapter_outline) if isinstance(chapter_outline, str) else chapter_outline
+        pacing = outline_dict.get("pacing_intent", "escalation")
+        pacing_guidance = _pacing_style_instruction(pacing)
+    except Exception:
+        pass
+
     # Include revision feedback if this is a revision (D-06)
     revision_feedback = ""
     if review_issues:
@@ -151,13 +185,22 @@ Story Context:
 Recent Chapters:
 {context['latest_chapters']}
 
+Previous Chapter Ending (transition anchor):
+{context['transition_anchor']}
+
 Active Characters:
 {context['active_characters']}
 
 Chapter Outline:
 {chapter_outline}
 
+{pacing_guidance}
+
 {revision_feedback}
+
+TRANSITION REQUIREMENT: The opening of this chapter must naturally flow from the previous chapter's ending. Echo the closing scene, mood, or emotion before introducing new elements. Do NOT start as if the previous chapter never happened.
+
+CHARACTER CONSTRAINT: Write about the characters listed in the outline. Do NOT introduce new named characters who are not in the Active Characters list above. Focus on deepening interactions between existing characters.
 
 Write the chapter content. Be creative but stay true to the outline and character personalities."""),
         HumanMessage(content="Write approximately 2000 words of engaging prose for this chapter."),
@@ -173,6 +216,36 @@ Write the chapter content. Be creative but stay true to the outline and characte
         updates["review_issues"] = []  # Clear for next iteration
 
     return updates
+
+
+def _pacing_style_instruction(pacing: str) -> str:
+    """Return style guidance based on the chapter's pacing intent."""
+    instructions = {
+        "setup": (
+            "PACING: SETUP — Take your time establishing scenes and atmosphere. "
+            "Use rich descriptions, foreshadowing, and measured dialogue. "
+            "Allow readers to settle into the world before events unfold."
+        ),
+        "escalation": (
+            "PACING: ESCALATION — Build momentum gradually. "
+            "Each scene should raise the stakes a little higher. "
+            "Balance action with moments of tension."
+        ),
+        "climax": (
+            "PACING: CLIMAX — Write with intensity. "
+            "Use shorter sentences and rapid scene changes. "
+            "Dialogue should be sharp and urgent. "
+            "Minimize lengthy descriptions — keep the reader on edge."
+        ),
+        "reflection": (
+            "PACING: REFLECTION — Slow the narrative significantly. "
+            "Focus on inner monologue, emotional processing, and quiet character moments. "
+            "Include daily-life details, sensory descriptions, and unhurried dialogue. "
+            "Let characters breathe and react to recent events. "
+            "This is NOT a chapter for major plot advancement."
+        ),
+    }
+    return instructions.get(pacing, "")
 
 
 def reviewer_node(state: dict) -> dict:
@@ -191,9 +264,21 @@ def reviewer_node(state: dict) -> dict:
     llm = create_llm_with_temp(temperature=0.2)
     story_bible: StoryBible = state["story_bible"]
     chapter_content = state.get("chapter_content", "")
+    chapter_outline = state.get("chapter_outline", "")
 
     # Build context (L3 + L4 for consistency check per D-11)
     context = format_context(story_bible)
+
+    # Parse outline for pacing intent
+    pacing_info = ""
+    try:
+        import json as _json
+        outline_dict = _json.loads(chapter_outline) if isinstance(chapter_outline, str) else chapter_outline
+        pacing = outline_dict.get("pacing_intent", "")
+        if pacing:
+            pacing_info = f"\nChapter pacing intent: {pacing}"
+    except Exception:
+        pass
 
     messages = [
         SystemMessage(content=f"""You are a story editor reviewing chapters for quality and consistency.
@@ -204,10 +289,17 @@ Story Context:
 Active Characters:
 {context['active_characters']}
 
+Previous Chapter Ending:
+{context['transition_anchor']}
+{pacing_info}
+
 Check for:
 1. Character consistency (names, personalities, relationships)
 2. Plot coherence (follows established timeline and logic)
 3. Writing quality (pacing, dialogue, description)
+4. TRANSITION QUALITY: Does the chapter opening naturally flow from the previous chapter's ending? The beginning should echo or carry forward the mood, scene, or emotion of the prior chapter's close. Mark as fail if the chapter starts as if the previous one never happened.
+5. CHARACTER BLOAT: Are the named characters in this chapter mostly from the Active Characters list above? Flag as an issue if the chapter introduces multiple new named characters who don't appear in the list. One new character is acceptable; more than one usually indicates character bloat.
+6. PACING MATCH: Does the writing style match the chapter's pacing intent? For "reflection" chapters, verify the prose is indeed slower with inner monologue and character moments. For "climax" chapters, verify the intensity is appropriate.
 
 Return pass if the chapter is acceptable, or fail with specific issues that need to be addressed."""),
         HumanMessage(content=f"""Review this chapter:

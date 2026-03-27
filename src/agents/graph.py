@@ -10,6 +10,7 @@ Exports:
 - run_generation: Invokes graph with recursion limit
 """
 
+import json
 from typing import Literal
 
 from langgraph.graph import StateGraph, START, END
@@ -50,8 +51,19 @@ def complete_node(state: GenerationState) -> dict:
     Returns:
         Dict with completed_chapter containing the finalized Chapter object.
     """
+    # Try to extract the title from the outline JSON
+    chapter_title = f"Chapter {state['current_chapter']}"
+    outline_raw = state.get("chapter_outline", "")
+    if outline_raw:
+        try:
+            outline_data = json.loads(outline_raw)
+            if outline_data.get("title"):
+                chapter_title = outline_data["title"]
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     chapter = Chapter(
-        title=f"Chapter {state['current_chapter']}",
+        title=chapter_title,
         content=state["chapter_content"],
         chapter_number=state["current_chapter"],
         chapter_outline=state.get("chapter_outline"),
